@@ -196,6 +196,15 @@ def _yield_finished_futures(fs, waiter, ref_collect):
         yield fs.pop()
 
 
+def _get_finished_futures(fs):
+    """Returns the set of futures finished or canceled."""
+    done = set()
+    for f in fs:
+        if f._state in [CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED]:
+            done.add(f)
+    return done
+
+
 def as_completed(fs, timeout=None):
     """An iterator over the given futures that yields each as it completes.
 
@@ -222,7 +231,7 @@ def as_completed(fs, timeout=None):
     with _AcquireFutures(fs):
         finished = set(
                 f for f in fs
-                if f._state in [CANCELLED_AND_NOTIFIED, FINISHED])
+                if f._state in [FINISHED, CANCELLED, CANCELLED_AND_NOTIFIED])
         pending = fs - finished
         waiter = _create_and_install_waiters(fs, _AS_COMPLETED)
     finished = list(finished)
@@ -288,7 +297,7 @@ def wait(fs, timeout=None, return_when=ALL_COMPLETED):
     fs = set(fs)
     with _AcquireFutures(fs):
         done = {f for f in fs
-                   if f._state in [CANCELLED_AND_NOTIFIED, FINISHED]}
+                if f._state in [FINISHED, CANCELLED_AND_NOTIFIED, CANCELLED]}
         not_done = fs - done
         if (return_when == FIRST_COMPLETED) and done:
             return DoneAndNotDoneFutures(done, not_done)

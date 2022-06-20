@@ -592,11 +592,11 @@ class WaitTests:
         future2 = self.executor.submit(time.sleep, 1.5)
 
         done, not_done = futures.wait(
-                [CANCELLED_FUTURE, future1, future2],
+                [future1, future2],
                  return_when=futures.FIRST_COMPLETED)
 
         self.assertEqual(set([future1]), done)
-        self.assertEqual(set([CANCELLED_FUTURE, future2]), not_done)
+        self.assertEqual(set([future2]), not_done)
 
     def test_first_completed_some_already_completed(self):
         future1 = self.executor.submit(time.sleep, 1.5)
@@ -634,9 +634,10 @@ class WaitTests:
                 return_when=futures.FIRST_EXCEPTION)
 
         self.assertEqual(set([SUCCESSFUL_FUTURE,
+                              CANCELLED_FUTURE,
                               CANCELLED_AND_NOTIFIED_FUTURE,
                               future1]), finished)
-        self.assertEqual(set([CANCELLED_FUTURE, future2]), pending)
+        self.assertEqual(set([future2]), pending)
 
     def test_first_exception_one_already_failed(self):
         future1 = self.executor.submit(time.sleep, 2)
@@ -684,6 +685,19 @@ class WaitTests:
                               SUCCESSFUL_FUTURE,
                               future1]), finished)
         self.assertEqual(set([future2]), pending)
+
+    def test_wait_returns_on_first_cancelled_future(self):
+        # https://github.com/python/cpython/issues/92001
+        executor = futures.ThreadPoolExecutor(max_workers=1)
+        # Creates 10 future tasks, and cancel only one of them
+        tasks = []
+        for _ in range(10):
+            tasks.append(executor.submit(time.sleep, 1))
+        tasks[-1].cancel()
+        finished, pending = futures.wait(tasks, return_when=futures.FIRST_COMPLETED)
+        self.assertEqual({tasks[-1]}, finished)
+        self.assertEqual({t for t in tasks[:-1]}, pending)
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 class ThreadPoolWaitTests(ThreadPoolMixin, WaitTests, BaseTestCase):
